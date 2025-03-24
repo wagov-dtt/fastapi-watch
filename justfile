@@ -12,12 +12,24 @@ prereqs:
 
 # Show local/env secrets for injecting into other tools
 @show-secrets:
-  jq -n 'env | {CDN_HEADER, ORIGIN_HEADER, ORIGIN_FQDN, ORIGIN_PATH}'
+  jq -n 'env | {CDN_HEADER, ORIGIN_HEADER, ORIGIN_BASE, ORIGIN_PATH}'
 
 # Setup minikube
 minikube:
   which k9s || just prereqs
   kubectl get nodes || minikube status || minikube start # if kube configured use that cluster, otherwise start minikube
 
+build: minikube
+  minikube image build -t ghcr.io/wagov-dtt/fastapi-watch:dev .
+
+lint:
+  uvx ruff format .
+
+ipython:
+  uvx ipython
+
 fastapi:
-  ORIGIN_FQDN=httpbin.org ORIGIN_PATH=get uv run fastapi dev
+  ORIGIN_BASE=http://127.0.0.1:8000 ORIGIN_PATH=mock_auth uv run uvicorn main:app --no-access-log
+
+traefik:
+  traefik --entryPoints.web.address=:8001 --providers.http.endpoint=http://127.0.0.1:8000/traefik_dynamic_conf.json

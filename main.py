@@ -1,23 +1,50 @@
 from fastapi import FastAPI, Request, status, BackgroundTasks
-import os, json, requests
+import os, json, sys
+from hishel import AsyncCacheClient, AsyncInMemoryStorage
+from httpx import Limits
+from datetime import datetime, timezone
+
+app = FastAPI()
+client = AsyncCacheClient(
+    limits=Limits(max_connections=1000), storage=AsyncInMemoryStorage()
+)
 
 app = FastAPI()
 
-ORIGIN_URL = f"https://{os.environ['ORIGIN_FQDN']}/{os.environ['ORIGIN_PATH']}"
+ORIGIN_URL = f"{os.environ['ORIGIN_BASE']}/{os.environ['ORIGIN_PATH']}"
 
-async def log_request(request: Request, body):
-    requester = requests.get(ORIGIN_URL).json()
-    logdata = {
-        "method": request.method,
-        "headers": request.headers,
-        "url": request.url,
-        "body": body,
-        "requester": requester
+
+@app.get("/traefik_dynamic_conf.json")
+async def traefik_config(request: Request):
+    return {
+        "http": {
+            "middlewares": {
+                "forwardAuth": {
+                    "forwardAuth": {
+                        "address": str(request.url_for("audit")),
+                        "forwardBody": True,
+                        "trustForwardHeader": True,
+                    }
+                }
+            },
+            "routers": {
+                "passthrough": {
+                    "rule": "PathPrefix(`/`)",
+                    "entryPoints": ["web"],
+                    "middlewares": ["forwardAuth"],
+                    "service": "backend",
+                }
+            },
+            "services": {
+                "backend": {
+                    "loadBalancer": {"servers": [{"url": os.environ["ORIGIN_BASE"]}]}
+                }
+            },
+        },
     }
-    print(logdata)
 
-@app.api_route("/{path:path}", methods=("DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"))
-async def catch_all(request: Request, background_tasks: BackgroundTasks, path: str = ""):
+
+async def body_to_string(request: Request):
     try:
         try:
             body = await request.json()
@@ -25,5 +52,37 @@ async def catch_all(request: Request, background_tasks: BackgroundTasks, path: s
             body = await request.body()
     except:
         body = ""
-    background_tasks.add_task(log_request, request, body)
+    return str(body)
+
+
+async def log_request(request: Request, body):
+    try:
+        response = await client.get(ORIGIN_URL, headers=request.headers)
+        requester = response.json()
+    except Exception as e:
+        requester = {"origin_url": ORIGIN_URL, "error": str(e)}
+    logdata = {
+        "start_time": request.state.start_time,
+        "headers": dict(request.headers),
+        "body": body,
+        "requester": requester,
+    }
+    json.dump(logdata, sys.stdout)
+    sys.stdout.write("\n")
+
+@app.get("/mock_auth")
+async def mock_auth(request: Request):
+    userinfo = {
+        "identity": "mock-userid",
+        "access": "allowed",
+        "auth-backend": "mock-identity-provider"
+    }
+    return userinfo
+    
+
+@app.get("/audit")
+async def audit(request: Request, tasks: BackgroundTasks):
+    request.state.start_time = datetime.now(timezone.utc).isoformat()
+    body = await body_to_string(request)
+    tasks.add_task(log_request, request, body)
     return status.HTTP_202_ACCEPTED
