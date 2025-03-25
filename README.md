@@ -13,3 +13,11 @@ The justfile in this repository should be able to build am audit namespace on a 
 - [ ] Cleanly convert request into json for logging
 - [ ] Add header validation for CDN/WAFs
 - [ ] Call separate origin path and add info to logs
+
+## Activities to try
+
+The current setup doesn't have validation configured or decent mock endpoints. We could:
+
+- Add a mock_origin endpoint to `main.py` to test header validation of a backend (i.e. only allowing requests when a shared secret is set e.g. via traefik)
+- Adjust the kustomize template to enable multiple namespaces (i.e. one namespace per origin configuration)
+- Extend a kustomize overlay to support eks on aws (i.e. as per [ADR operations/002-workloads.md](https://github.com/wagov-dtt/architecture-decision-records/blob/main/operations/002-workloads.md) )

@@ -18,4 +18,4 @@ RUN ["uv", "sync", "--frozen"]
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-CMD ["uvicorn", "main:app", "--no-access-log"]
+CMD ["uvicorn", "main:app", "--no-access-log", "--host", "0.0.0.0"]

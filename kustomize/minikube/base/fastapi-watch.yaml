@@ -1,0 +1,41 @@
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: fastapi-watch-service
+spec:
+  ports:
+    - name: "http"
+      port: 80
+      targetPort: 8000
+  selector:
+    app: fastapi-watch
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastapi-watch-deployment
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: fastapi-watch
+  template:
+    metadata:
+      labels:
+        app: fastapi-watch
+    spec:
+      containers:
+        - name: fastapi-watch
+          image: ghcr.io/wagov-dtt/fastapi-watch:dev
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+          env:
+            - name: ORIGIN_BASE
+              value: "http://fastapi-watch-service"
+            - name: ORIGIN_PATH
+              value: "mock_auth"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+      restartPolicy: Always

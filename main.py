@@ -19,7 +19,7 @@ async def traefik_config(request: Request):
     return {
         "http": {
             "middlewares": {
-                "forwardAuth": {
+                "forward-auth": {
                     "forwardAuth": {
                         "address": str(request.url_for("audit")),
                         "forwardBody": True,
@@ -29,15 +29,16 @@ async def traefik_config(request: Request):
             },
             "routers": {
                 "passthrough": {
+                    # Can restrict by headers e.g. "rule": "Header(`X-CDN-token`, `secret`) && PathPrefix(`/`)",
                     "rule": "PathPrefix(`/`)",
                     "entryPoints": ["web"],
-                    "middlewares": ["forwardAuth"],
+                    "middlewares": ["forward-auth"],
                     "service": "backend",
                 }
             },
             "services": {
                 "backend": {
-                    "loadBalancer": {"servers": [{"url": os.environ["ORIGIN_BASE"]}]}
+                    "loadBalancer": {"servers": [{"url": os.environ['ORIGIN_BASE']}]}
                 }
             },
         },
@@ -71,9 +72,9 @@ async def log_request(request: Request, body):
     sys.stdout.write("\n")
 
 @app.get("/mock_auth")
-async def mock_auth(request: Request):
+async def mock_auth(request: Request, identity: str = "mock-userid"):
     userinfo = {
-        "identity": "mock-userid",
+        "identity": identity,
         "access": "allowed",
         "auth-backend": "mock-identity-provider"
     }
